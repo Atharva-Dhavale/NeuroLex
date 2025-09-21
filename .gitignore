@@ -22,7 +22,8 @@ dist/
 # IDE
 .vscode/
 .idea/
-
+.venv/
+venv/
 # OS
 .DS_Store
 Thumbs.db
