@@ -1,0 +1,4 @@
+Trade Id,Trade Date,Reference Spot Price,Notional Amount,Strike Price,Call/Put,Buying/Selling,Expiry Date,Business Calendar,Delivery Date,Premium Rate,Transaction Currency (Transaction CCY),Counter Currency (Counter CCY),Underlying Currency
+T001,2025-04-01,1.1472,371410 USD,1.5027,Put,Buying,2025-04-28,Following New York Business Calendar,2025-04-30,0.0464,USD,EUR,GBP
+T002,2025-04-01,1.3493,471988 USD,1.4124,Put,Selling,2025-04-28,Following New York Business Calendar,2025-04-30,0.0362,USD,EUR,GBP
+T003,2025-04-01,1.1973,365088 USD,1.1545,Put,Selling,2025-04-28,Following New York Business Calendar,2025-04-30,0.0201,USD,EUR,GBP
