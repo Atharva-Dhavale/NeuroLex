@@ -24,6 +24,24 @@ dist/
 .idea/
 .venv/
 venv/
+media/
+.media/
+
+# Large files that shouldn't be in git
+*.zip
+*.tar.gz
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.pdf
+*.dmg
+*.iso
+
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
