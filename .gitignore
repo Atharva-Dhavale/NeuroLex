@@ -45,3 +45,50 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+
+# ======================
+# Node / Next.js ignores
+# ======================
+node_modules/
+.next/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ======================
+# Python ignores
+# ======================
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# ======================
+# OS / IDE files
+# ======================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ======================
+# Large binary libs (Torch, etc.)
+# ======================
+*.dylib
+*.so
+*.dll
+*.bin
+*.pack
+
+# ======================
+# Specific to your paths
+# ======================
+frontend/.next/cache/webpack/
+frontend/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node
+backend/venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
