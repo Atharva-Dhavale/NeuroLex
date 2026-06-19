@@ -13,6 +13,7 @@ class Document(models.Model):
     """Modern, unified model for document processing"""
     STATUS_CHOICES = (
         ('uploaded', 'Uploaded'),
+        ('extracted', 'Extracted'),
         ('processing', 'Processing'),
         ('processed', 'Processed'),
         ('validated', 'Validated'),
@@ -23,7 +24,7 @@ class Document(models.Model):
     file = models.FileField(upload_to=upload_path, blank=True, null=True)
     file_type = models.CharField(max_length=50, blank=True, default='txt')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='uploaded')
     

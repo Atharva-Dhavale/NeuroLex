@@ -5,7 +5,7 @@ This module provides advanced RAG functionality for term sheet validation:
 1. Loading reference term sheet data from CSV
 2. Converting data to vector embeddings with SentenceTransformers
 3. Storing and retrieving vectors with FAISS
-4. Validation using Gemini API with reference data
+4. Validation using OpenRouter LLM with reference data
 """
 
 import os
@@ -16,14 +16,11 @@ import numpy as np
 import re
 from sentence_transformers import SentenceTransformer
 import faiss
-import google.generativeai as genai
 from django.conf import settings
 import logging
+from .llm_client import generate_content
 
 logger = logging.getLogger(__name__)
-
-# Configure Gemini API
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Initialize the sentence transformer model for embeddings
 MODEL_NAME = 'all-MiniLM-L6-v2'  # A lightweight model good for semantic search
@@ -706,16 +703,13 @@ def validate_term_sheet_with_rag(structured_data):
         """
         
         try:
-            # Initialize the Gemini model
-            gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-            
-            # Generate validation response
-            response = gemini_model.generate_content(validation_prompt)
-            
+            # Use the OpenRouter LLM client
+            response_text_raw = generate_content(validation_prompt)
+
             # Parse the response
             try:
                 # Clean up the response text - sometimes the model returns markdown JSON blocks
-                response_text = response.text.strip()
+                response_text = response_text_raw.strip()
                 if response_text.startswith("```json"):
                     response_text = response_text.split("```json")[1]
                 if response_text.startswith("```"):
@@ -765,12 +759,12 @@ def validate_term_sheet_with_rag(structured_data):
                     return serializable_result
             except json.JSONDecodeError as json_err:
                 logger.error(f"Failed to parse JSON from model response: {json_err}")
-                logger.error(f"Raw response: {response.text}")
+                logger.error(f"Raw response: {response_text_raw}")
                 
                 # Attempt to extract key information from non-JSON response
                 try:
                     # Create a default result based on text analysis
-                    lines = response.text.split('\n')
+                    lines = response_text_raw.split('\n')
                     overall_status = "uncertain"
                     explanation = "Validation processing error"
                     
@@ -793,7 +787,7 @@ def validate_term_sheet_with_rag(structured_data):
                         "overall_status": overall_status,
                         "explanation": explanation or "Unable to validate due to processing error",
                         "issues": [],
-                        "raw_response": response.text[:1000],  # Include truncated raw response for debugging
+                        "raw_response": response_text_raw[:1000],  # Include truncated raw response for debugging
                         "rag_metadata": {
                             "reference_sheet_id": reference_id,
                             "similarity_score": similarity_score,
@@ -814,7 +808,7 @@ def validate_term_sheet_with_rag(structured_data):
                     }
                 
         except Exception as e:
-            logger.error(f"Error generating validation with Gemini: {str(e)}")
+            logger.error(f"Error generating validation with OpenRouter: {str(e)}")
             return {
                 "overall_status": "uncertain",
                 "explanation": f"Unable to validate due to AI service error: {str(e)}",
