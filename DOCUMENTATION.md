@@ -1,6 +1,6 @@
 # NeuroLex: Term Sheet Analyzer — Technical Documentation
 
-> **Version:** 2.0 · **Last Updated:** June 19, 2026
+> **Version:** 2.1 · **Last Updated:** June 20, 2026
 > A comprehensive "Zero-to-Hero" guide for new developers joining the project.
 
 ---
@@ -14,7 +14,7 @@
 5. [API & Data Models](#5-api--data-models)
 6. [Architecture Diagram (Mermaid.js)](#6-architecture-diagram-mermaidjs)
 7. [Sequence Diagram (Mermaid.js)](#7-sequence-diagram-mermaidjs)
-8. [Environment & Setup](#8-environment--setup)
+8. [Environment & Setup (Execution Guide)](#8-environment--setup-execution-guide)
 9. [Error Handling Strategy](#9-error-handling-strategy)
 10. [Key Design Decisions](#10-key-design-decisions)
 
@@ -705,38 +705,153 @@ sequenceDiagram
 
 ---
 
-## 8. Environment & Setup
+## 8. Environment & Setup (Execution Guide)
 
-### Prerequisites
+This section documents how the project is **actually executed**, including the exact runtime versions and commands that were verified working on macOS (Apple Silicon).
 
-- **Node.js** ≥ 18.x and npm
-- **Python** 3.10 (Django 4.2 requires ≥ 3.10; the project was set up with `python3.10`)
-- **OpenRouter API Key** (from [openrouter.ai](https://openrouter.ai/keys))
-- **MongoDB Atlas** connection string (a cluster + database named `NeuroLex`)
-- Tesseract OCR (optional, for server-side image OCR)
-- Poppler (optional, for `pdf2image` PDF-to-image conversion)
+### 8.1 Verified Runtime Environment
 
-### Backend Setup
+| Component | Version used | Notes |
+|-----------|--------------|-------|
+| OS | macOS (Apple Silicon, `darwin`) | |
+| Python | **3.10.x** (Homebrew: `/opt/homebrew/bin/python3.10`) | Django 4.2 requires Python ≥ 3.10. The system Python (3.9.6) is **too old** and will fail to install Django. |
+| Node.js | **v26** (Homebrew) | Installed via `brew install node`; provides `npm` v11+. |
+| MongoDB | MongoDB Atlas (cloud) | Database name: `NeuroLex`, collection: `documents`. |
+| LLM | OpenRouter `openai/gpt-oss-120b:free` | Free tier — rate limited. |
+
+> **Important:** Use `python3.10` explicitly for every backend command. Running plain `python3` may resolve to the system Python 3.9, which cannot run Django 4.2.
+
+### 8.2 Prerequisites & Their Installation
+
+```bash
+# Node.js + npm (if not already installed)
+brew install node
+
+# Python 3.10 (if not already installed)
+brew install python@3.10
+
+# Optional system tools for server-side extraction fallbacks
+brew install tesseract     # OCR for image-based files
+brew install poppler       # pdf2image PDF→image conversion
+```
+
+You also need:
+- An **OpenRouter API key** — from [openrouter.ai/keys](https://openrouter.ai/keys)
+- A **MongoDB Atlas** connection string (SRV format) for a cluster with a `NeuroLex` database
+
+### 8.3 Configure `backend/.env`
+
+Create `backend/.env` (gitignored — never commit it):
+
+```dotenv
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENROUTER_MODEL=openai/gpt-oss-120b:free
+MONGO_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/NeuroLex?retryWrites=true&w=majority
+DJANGO_SECRET_KEY=django-insecure-change-me
+DEBUG=True
+```
+
+### 8.4 Backend — Install, Migrate, Run
 
 ```bash
 cd backend
-python3.10 -m pip install -r requirements.txt
-python3.10 manage.py migrate          # sets up SQLite internals only
-python3.10 manage.py runserver        # http://localhost:8000
+
+# 1. Install Python dependencies (first run also downloads the
+#    sentence-transformers model 'all-MiniLM-L6-v2' on first import — ~90MB)
+/opt/homebrew/bin/python3.10 -m pip install -r requirements.txt
+
+# 2. Apply migrations (SQLite internals only: auth, sessions, admin)
+/opt/homebrew/bin/python3.10 manage.py migrate
+
+# 3. Run the dev server
+/opt/homebrew/bin/python3.10 manage.py runserver 8000
 ```
 
-Convenience script: `./start_backend.sh` (from the repo root).
+The backend starts on **http://localhost:8000**.
 
-### Frontend Setup
+On startup you should see (in order):
+1. `Vector store initialized with N reference documents` — FAISS/RAG ready.
+2. On the first API request: `Connected to MongoDB Atlas — database: NeuroLex`.
+
+> The FAISS vector store and the SentenceTransformer model load **at import time** of `rag_service.py`. The very first run downloads the embedding model, so the first `migrate`/`runserver` can take longer than subsequent runs.
+
+### 8.5 Frontend — Install, Build, Run
 
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
-npm run dev          # http://localhost:3000 (Turbopack)
-npm run build        # production build (verified clean)
+
+# Development server (Turbopack) — http://localhost:3000
+npm run dev
+
+# OR a production build (verified clean — 0 type/lint errors)
+npm run build
+npm run start
 ```
 
-Convenience script: `./start_frontend.sh` (from the repo root).
+The frontend starts on **http://localhost:3000** and talks to the backend at `http://localhost:8000/api` (override with `NEXT_PUBLIC_API_URL`).
+
+### 8.6 Convenience Scripts (from repo root)
+
+Two helper scripts are committed at the repo root and pin the correct binaries:
+
+```bash
+./start_backend.sh     # runs: python3.10 manage.py runserver 8000
+./start_frontend.sh    # runs: npm run dev
+```
+
+### 8.7 End-to-End Smoke Test (verified)
+
+With both servers running, the full pipeline can be exercised with `curl`:
+
+```bash
+# 1. Create a document from raw text
+DOC_ID=$(curl -s -X POST http://localhost:8000/api/documents/ \
+  -H "Content-Type: application/json" \
+  -d '{"title":"FX Test","file_type":"txt","extracted_text":"Trade ID: FX20240620\nTrade Date: 2024-06-20\nReference Spot Price: 1.1050\nNotional Amount: 2000000 USD\nStrike Price: 1.1100\nOption Type: Call\nPosition Type: Buying\nExpiry Date: 2024-09-20\nBusiness Calendar: NYSE\nDelivery Date: 2024-09-22\nPremium Rate: 2.2%\nTransaction Currency: EUR\nCounter Currency: USD\nUnderlying Currency: EUR/USD"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+# 2. Process it (LLM extraction via OpenRouter)
+curl -s -X POST http://localhost:8000/api/documents/$DOC_ID/process/
+
+# 3. Validate it (RAG + LLM judgment)
+curl -s -X POST http://localhost:8000/api/documents/$DOC_ID/validate/
+```
+
+Expected: step 2 returns the 14 structured fields; step 3 returns `overall_status`, `explanation`, `issues`, and `rag_metadata`. The document's `status` advances `extracted → processed → validated` in MongoDB Atlas.
+
+### 8.8 Environment Variables Reference
+
+The backend loads `.env` automatically via `python-dotenv`. This file is gitignored — never commit secrets.
+
+| Variable | Description |
+|----------|-------------|
+| `OPENROUTER_API_KEY` | OpenRouter API key (Bearer token) |
+| `OPENROUTER_MODEL` | Model id, default `openai/gpt-oss-120b:free` |
+| `MONGO_URI` | MongoDB Atlas connection string (SRV format) |
+| `DJANGO_SECRET_KEY` | Django secret key |
+| `DEBUG` | `True` / `False` |
+
+Frontend:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` | Backend API URL |
+
+Relevant `settings.py` keys derived from the env: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL` (`https://openrouter.ai/api/v1/chat/completions`), `MONGO_URI`, `MONGO_DB_NAME` (`NeuroLex`).
+
+### 8.9 Troubleshooting (issues encountered during execution)
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Could not find a version that satisfies the requirement django==4.2.x` | Plain `python3`/`pip3` resolves to system Python 3.9 | Use `/opt/homebrew/bin/python3.10 -m pip ...` |
+| `command not found: npm` | Node.js not installed | `brew install node` |
+| `429 RESOURCE_EXHAUSTED` / rate-limit error in process/validate response | OpenRouter free-tier rate limit on `:free` model | Wait and retry, or switch `OPENROUTER_MODEL` to a paid model |
+| First `runserver` is slow / downloads a model | `sentence-transformers` downloads `all-MiniLM-L6-v2` on first import | Normal; cached for subsequent runs |
+| MongoDB connection timeout | Atlas IP allowlist or bad `MONGO_URI` | Allow your IP in Atlas Network Access; verify the SRV URI |
+| VS Code shows `bad object` / `frontend/.git` warnings | Stale git-extension cache after unifying the frontend repo | Reload the editor window |
 
 ### Environment Variables (`backend/.env`)
 

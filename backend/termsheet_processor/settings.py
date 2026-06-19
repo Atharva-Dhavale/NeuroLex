@@ -78,11 +78,17 @@ DATABASES = {
 }
 
 # ─── MongoDB Atlas ────────────────────────────────────────────────────────────
-MONGO_URI = os.environ.get(
-    'MONGO_URI',
-    'mongodb+srv://atharvadhavale5:Atharva6013@clusterone.owvrs.mongodb.net/NeuroLex?retryWrites=true&w=majority&appName=ClusterOne'
-)
-MONGO_DB_NAME = 'NeuroLex'
+# Connection string is provided via the MONGO_URI environment variable (.env).
+# Never hardcode credentials here — see .env.example for the expected format.
+MONGO_URI = os.environ.get('MONGO_URI', '')
+MONGO_DB_NAME = os.environ.get('MONGO_DB_NAME', 'NeuroLex')
+
+if not MONGO_URI:
+    import warnings
+    warnings.warn(
+        "MONGO_URI is not set. Create backend/.env from .env.example and set MONGO_URI.",
+        RuntimeWarning,
+    )
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
