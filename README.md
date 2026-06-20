@@ -138,6 +138,32 @@ Open **http://localhost:3000**, upload a term sheet, and watch it get extracted 
 
 ---
 
+## 🐳 Run with Docker
+
+The entire stack is containerized (MongoDB runs on Atlas, so no DB container is needed).
+
+```bash
+# 1. Configure backend secrets
+cp backend/.env.example backend/.env
+# → edit backend/.env with your OPENROUTER_API_KEY and MONGO_URI
+
+# 2. Build and start both services
+docker compose up --build
+```
+
+- Frontend → **http://localhost:3000**
+- Backend API → **http://localhost:8000/api**
+
+The backend image pre-downloads the embedding model and runs under Gunicorn; the frontend is built as an optimized Next.js standalone server. To run in the background use `docker compose up -d --build`, and stop with `docker compose down`.
+
+To point the frontend at a non-local backend, set the build arg:
+
+```bash
+NEXT_PUBLIC_API_URL=https://api.example.com/api docker compose up --build
+```
+
+---
+
 ## 🔌 API Reference
 
 Base URL: `http://localhost:8000/api/`

@@ -70,10 +70,14 @@ WSGI_APPLICATION = 'termsheet_processor.wsgi.application'
 # ─── Database ────────────────────────────────────────────────────────────────
 # SQLite is used ONLY for Django internals (auth, sessions, admin).
 # All application data (documents, validation results) is stored in MongoDB Atlas.
+# DJANGO_SQLITE_DIR lets Docker place the DB file on a persistent volume.
+SQLITE_DIR = os.environ.get('DJANGO_SQLITE_DIR', str(BASE_DIR))
+os.makedirs(SQLITE_DIR, exist_ok=True)
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': os.path.join(SQLITE_DIR, 'db.sqlite3'),
     }
 }
 
@@ -106,6 +110,7 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files (uploaded by users)
 MEDIA_URL = '/media/'
