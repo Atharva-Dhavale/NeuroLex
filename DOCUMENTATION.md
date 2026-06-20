@@ -1,6 +1,6 @@
 # NeuroLex: Term Sheet Analyzer — Technical Documentation
 
-> **Version:** 2.1 · **Last Updated:** June 20, 2026
+> **Version:** 2.2 · **Last Updated:** June 20, 2026
 > A comprehensive "Zero-to-Hero" guide for new developers joining the project.
 
 ---
@@ -62,6 +62,7 @@
 | **Internal Database** | SQLite (Django auth/sessions/admin only) | Built-in |
 | **CORS** | django-cors-headers | 4.6.0 |
 | **Config** | python-dotenv | 1.0.1 |
+| **Containerization** | Docker + Docker Compose (Gunicorn, Next.js standalone) | — |
 | **Runtime** | Python 3.10 / Node.js ≥ 18 | — |
 
 ---
@@ -274,10 +275,28 @@ Contains CSV files used by the RAG service for term sheet validation:
 |------|-------------|
 | `api.ts` | `API_ENDPOINTS` constants object with URL builder functions for all API routes |
 
-#### 3.2.7 Build Configuration
+#### 3.2.7 Build & Styling Configuration
 
-- `next.config.js` — Sets webpack `resolve.fallback` polyfills (`fs`, `path`, `crypto`, `os`, `stream`, `zlib` → `false`) so client-side extraction libraries (tesseract.js, pdfjs-dist) work in the browser. (The previously duplicate `next.config.ts` has been removed.)
-- `eslint.config.mjs` — Extends `next/core-web-vitals` + `next/typescript`, with `no-explicit-any` disabled and `no-unused-vars` / `exhaustive-deps` set to warnings to keep production builds clean.
+- **`next.config.js`** — Three responsibilities:
+  1. `output: 'standalone'` — produces a self-contained server bundle for small, efficient Docker images.
+  2. `resolve.fallback` polyfills (`fs`, `path`, `crypto`, `os`, `stream`, `zlib` → `false`) so client-side extraction libraries (tesseract.js, pdfjs-dist) work in the browser.
+  3. `resolve.alias.canvas = false` — prevents webpack from bundling the native `canvas` `.node` binary that `pdfjs-dist` optionally pulls in for Node-side rendering (only used in the browser here). Without this, the Docker build fails with a "Module parse failed" error.
+  *(The previously duplicate `next.config.ts` has been removed.)*
+
+- **`eslint.config.mjs`** — Extends `next/core-web-vitals` + `next/typescript`, with `no-explicit-any` disabled and `no-unused-vars` / `exhaustive-deps` set to warnings to keep production builds clean.
+
+#### 3.2.8 Styling System (TailwindCSS v4)
+
+The UI is styled with **TailwindCSS v4**, which is configured differently from v3:
+
+- **`postcss.config.mjs`** uses the `@tailwindcss/postcss` plugin.
+- **`src/app/globals.css`** is the entry point. It does `@import "tailwindcss";` and then **`@config "../../tailwind.config.js";`**.
+
+  > ⚠️ **Critical:** Tailwind v4 does **not** auto-load `tailwind.config.js`. The `@config` directive is required. Without it, the custom color palettes and animations defined in the JS config are never generated, and every `primary-*` / `success-*` / `danger-*` / `warning-*` class and `animate-fade-in` / `animate-slide-in` / `animate-scale-in` / `animate-pulse-gentle` class silently renders as no style. (This was a real bug that broke the status badges, buttons, and spinners on the Documents page — fixed by adding the `@config` directive.)
+
+- **`tailwind.config.js`** defines four semantic color scales — `primary` (indigo), `success` (green), `danger` (red), `warning` (amber) — plus custom keyframe animations.
+- **`globals.css`** also wires the Next.js-loaded **Inter** font (`--font-inter`) into `--font-family` for consistent typography, and sets base background/foreground CSS variables.
+- **`Button` component** uses Tailwind's built-in palettes (`indigo`, `slate`, `rose`) for its variants, so it is independent of the custom config.
 
 ---
 
@@ -852,26 +871,41 @@ Relevant `settings.py` keys derived from the env: `OPENROUTER_API_KEY`, `OPENROU
 | First `runserver` is slow / downloads a model | `sentence-transformers` downloads `all-MiniLM-L6-v2` on first import | Normal; cached for subsequent runs |
 | MongoDB connection timeout | Atlas IP allowlist or bad `MONGO_URI` | Allow your IP in Atlas Network Access; verify the SRV URI |
 | VS Code shows `bad object` / `frontend/.git` warnings | Stale git-extension cache after unifying the frontend repo | Reload the editor window |
+| Docker frontend build: `Module parse failed: Unexpected character` on `canvas.node` | webpack tried to bundle pdfjs's native canvas binary | Already fixed via `resolve.alias.canvas = false` in `next.config.js` |
+| Docker backend: `unable to open database file` | Named volume mounted at `/app/db` owned by root, container runs as non-root | Already fixed — `/app/db` is pre-created with `app` ownership in the Dockerfile |
+| Windows: `entrypoint.sh: bad interpreter` in container | CRLF line endings from a Windows clone | Already fixed via `.gitattributes` (LF) + `sed`/`chmod` in Dockerfile |
+| Documents page badges/buttons unstyled | Tailwind v4 didn't load `tailwind.config.js` | Already fixed via `@config` directive in `globals.css` |
 
-### Environment Variables (`backend/.env`)
+### 8.10 Docker Deployment
 
-The backend loads `.env` automatically via `python-dotenv`. This file is gitignored — never commit secrets.
+The entire stack is containerized. MongoDB runs on Atlas (cloud), so only the backend and frontend are containers.
 
-| Variable | Description |
-|----------|-------------|
-| `OPENROUTER_API_KEY` | OpenRouter API key (Bearer token) |
-| `OPENROUTER_MODEL` | Model id, default `openai/gpt-oss-120b:free` |
-| `MONGO_URI` | MongoDB Atlas connection string (SRV format) |
-| `DJANGO_SECRET_KEY` | Django secret key |
-| `DEBUG` | `True` / `False` |
+```bash
+# Configure secrets first
+cp backend/.env.example backend/.env   # add OPENROUTER_API_KEY + MONGO_URI
 
-Frontend:
+# Build and run both services
+docker compose up --build
+# Frontend → http://localhost:3000   |   Backend → http://localhost:8000/api
+```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000/api` | Backend API URL |
+**Files involved:**
 
-Relevant `settings.py` keys derived from the env: `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_BASE_URL` (`https://openrouter.ai/api/v1/chat/completions`), `MONGO_URI`, `MONGO_DB_NAME` (`NeuroLex`).
+| File | Role |
+|------|------|
+| `backend/Dockerfile` | Python 3.10 image; installs system deps (tesseract-ocr, poppler-utils, libmagic1, libgomp1); pre-downloads the `all-MiniLM-L6-v2` model; normalizes `entrypoint.sh` (strips CRLF, `chmod +x`); runs as non-root `app` user |
+| `backend/entrypoint.sh` | Runs `migrate` → `collectstatic` → **Gunicorn** (`termsheet_processor.wsgi`, 3 workers) |
+| `frontend/Dockerfile` | 3-stage build (deps → build → runtime) producing a Next.js **standalone** server, runs as non-root `nextjs` user |
+| `docker-compose.yml` | Orchestrates `backend` (8000) + `frontend` (3000); persistent named volumes `backend_db` (SQLite internals) and `backend_media` (uploads); injects `backend/.env` |
+| `.gitattributes` | Forces **LF** line endings for `*.sh`, `Dockerfile`, and YAML so Windows clones don't corrupt the container scripts |
+
+**Cross-platform notes:**
+
+- Containers run their own Linux Python/Node — the host's `python3` (macOS) vs `python` (Windows) is irrelevant.
+- Base images are multi-arch: Docker pulls **arm64** on Apple Silicon and **amd64** on Windows/Intel automatically.
+- On **Windows**, use Docker Desktop with the **WSL 2 backend**, then `docker compose up --build`.
+- Override the frontend's API target at build time: `NEXT_PUBLIC_API_URL=https://api.example.com/api docker compose up --build`.
+- The SQLite file is placed on the `backend_db` volume via the `DJANGO_SQLITE_DIR` env so it persists across container restarts.
 
 ---
 
@@ -909,6 +943,10 @@ Relevant `settings.py` keys derived from the env: `OPENROUTER_API_KEY`, `OPENROU
 | **5-strategy JSON parsing** | LLM output varies (markdown blocks, Python-style booleans, etc.); multiple strategies ensure robust parsing |
 | **Same LLM for extraction AND validation** | Single provider simplifies infra; extraction uses structured prompts, validation uses comparison-based prompts |
 | **Single unified Documents API** | The legacy term-sheet/extracted-data/validation ViewSets were removed to reduce maintenance surface |
+| **TailwindCSS v4 with `@config`** | v4 doesn't auto-load `tailwind.config.js`; the `@config` directive keeps the custom semantic palette and animations working without a full migration to CSS-based theme tokens |
+| **`canvas` aliased to `false`** | pdfjs-dist's optional native canvas binary must never be bundled by webpack; the app uses pdfjs only in the browser |
+| **Dockerized with Gunicorn + Next.js standalone** | Reproducible, host-agnostic deployment; multi-arch base images run natively on macOS (arm64) and Windows (amd64) |
+| **`.gitattributes` enforcing LF** | Guarantees container shell scripts work after Windows clones (CRLF would break the entrypoint) |
 | **CORS allow all origins** | Development convenience; must be restricted in production |
 
 ---

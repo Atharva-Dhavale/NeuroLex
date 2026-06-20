@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TermSheet Analyzer - Process and Validate Term Sheets",
-  description: "Upload, extract, and validate term sheet data using AI technology",
+  title: "NeuroLex — AI Term Sheet Analyzer & Validator",
+  description: "Upload, extract, and validate financial trading term sheets using AI.",
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body className="text-black">
         {children}
       </body>
