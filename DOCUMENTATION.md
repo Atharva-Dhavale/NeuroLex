@@ -1,6 +1,6 @@
 # NeuroLex: Term Sheet Analyzer — Technical Documentation
 
-> **Version:** 2.3 · **Last Updated:** June 20, 2026
+> **Version:** 2.4 · **Last Updated:** June 20, 2026
 > A comprehensive "Zero-to-Hero" guide for new developers joining the project.
 
 ---
@@ -117,6 +117,30 @@ NeuroLex follows a **Layered Client-Server Architecture** with clear separation 
 
 ### 3.1 Backend (`backend/`)
 
+```
+backend/
+├── config/                 # Django project package
+│   ├── settings.py         # settings (env, DB, CORS, DRF, OpenRouter, logging)
+│   ├── urls.py             # root URLConf (mounts /admin/ and /api/)
+│   ├── wsgi.py · asgi.py   # deployment entry points
+│   └── __init__.py
+├── documents/              # Django app — document processing & validation
+│   ├── views.py            # REST API (class-based APIViews)
+│   ├── urls.py             # /api/ route definitions
+│   ├── repository.py       # MongoDB Atlas data-access layer (pymongo)
+│   ├── services.py         # text extraction + LLM structuring/validation orchestration
+│   ├── llm_client.py       # OpenRouter chat-completions client
+│   ├── rag_service.py      # FAISS + SentenceTransformers RAG validation
+│   ├── apps.py             # AppConfig (initializes the RAG vector store on startup)
+│   ├── migrations/         # intentionally empty (no ORM models — data is in MongoDB)
+│   └── management/commands/# prepare_reference_data, test_rag (dev utilities)
+├── data/                   # reference CSV datasets (RAG corpus)
+├── media/uploads/          # uploaded files (dev)
+├── Dockerfile · entrypoint.sh
+├── manage.py · requirements.txt
+└── .env.example
+```
+
 #### 3.1.1 `config/` — Django Project Configuration
 
 | File | Responsibility |
@@ -200,18 +224,30 @@ Helper: `make_json_safe(obj)` recursively sanitises NaN/Infinity and non-seriali
 
 ##### `urls.py` — API Routing
 
-Plain `path()` routing (no DRF router). All routes are prefixed with `/api/` via the project `urls.py`.
+Plain `path()` routing (no DRF router). All routes are prefixed with `/api/` via the project `config/urls.py`.
+
+##### `apps.py` — App Configuration
+
+`DocumentsConfig.ready()` initializes the RAG vector store when the Django dev server starts (guarded by `RUN_MAIN` so it runs once). Under Gunicorn the store is initialized at module import of `rag_service.py`.
+
+##### `management/commands/` — Developer Utilities
+
+| Command | Purpose |
+|---------|---------|
+| `python manage.py prepare_reference_data` | Generates a sample trading-term-sheet reference CSV (`data/term_sheet_reference.csv`) for RAG testing |
+| `python manage.py test_rag` | Runs `rag_service.debug_rag_service()` to smoke-test the FAISS search + validation pipeline |
 
 #### 3.1.3 `data/` — Reference Data
 
-Contains CSV files used by the RAG service for term sheet validation:
+CSV datasets for the RAG service. Only **`Validated_Term_Sheet_Data.csv`** is loaded at runtime (by `rag_service.initialize_vector_store()`); the remaining files are sample/auxiliary datasets kept for experimentation.
 
 | File | Purpose |
 |------|---------|
-| `Validated_Term_Sheet_Data.csv` | **Primary reference** loaded by `rag_service.py` for FAISS indexing |
-| `termsheet_validation_final.csv` | Large validation dataset |
-| `termsheet_validation_large.csv` | Additional reference data |
-| `term_sheet_reference.csv` | Supplementary reference data |
+| `Validated_Term_Sheet_Data.csv` | **Primary reference** loaded for FAISS indexing |
+| `term_sheet_reference.csv` / `term_sheet_reference1.csv` | Sample reference data (e.g. output of `prepare_reference_data`) |
+| `termsheet_validation_final.csv` / `_final_updated.csv` | Validation datasets |
+| `termsheet_validation_large.csv` / `_large1.csv` | Larger sample datasets |
+| `Recent_Term_Sheet_Validation_PDF.csv` | Auxiliary sample data |
 
 ---
 
