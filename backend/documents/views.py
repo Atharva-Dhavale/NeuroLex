@@ -7,7 +7,7 @@ import traceback
 import json
 import math
 
-from .mongodb import (
+from .repository import (
     create_document, get_document, list_documents,
     update_document, delete_document, delete_all_documents,
     normalise_doc,

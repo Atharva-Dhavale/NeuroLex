@@ -211,24 +211,28 @@ An interactive API docs page is available at `/api-docs` in the running app.
 ```
 NeuroLex/
 ├── backend/
-│   ├── api/
-│   │   ├── mongodb.py          # MongoDB Atlas data-access layer (pymongo)
+│   ├── documents/              # Django app: document processing & validation
+│   │   ├── repository.py       # MongoDB Atlas data-access layer (pymongo)
 │   │   ├── llm_client.py       # OpenRouter LLM client
 │   │   ├── services.py         # Text extraction + structured-data processing
 │   │   ├── rag_service.py      # FAISS + SentenceTransformers RAG validation
 │   │   ├── views.py            # REST API (class-based APIViews)
 │   │   └── urls.py             # API routes
-│   ├── termsheet_processor/    # Django project config
+│   ├── config/                 # Django project config (settings, urls, wsgi, asgi)
 │   ├── data/                   # Reference CSV datasets (RAG corpus)
+│   ├── Dockerfile
+│   ├── entrypoint.sh
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
 │   └── src/
 │       ├── app/                # Next.js App Router pages
-│       ├── components/         # React components
+│       ├── components/         # React components (+ layout/, ui/)
 │       ├── services/           # Axios API client
 │       ├── utils/              # Client-side text extraction
+│       ├── config/             # API endpoint configuration
 │       └── types/              # TypeScript definitions
+├── docker-compose.yml
 ├── DOCUMENTATION.md            # Full technical documentation
 ├── CONTRIBUTING.md
 └── LICENSE

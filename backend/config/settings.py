@@ -1,5 +1,5 @@
 """
-Django settings for termsheet_processor project.
+Django settings for the NeuroLex project.
 """
 
 from pathlib import Path
@@ -30,7 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'api',
+    'documents',
 ]
 
 MIDDLEWARE = [
@@ -47,7 +47,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-ROOT_URLCONF = 'termsheet_processor.urls'
+ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
@@ -65,7 +65,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'termsheet_processor.wsgi.application'
+WSGI_APPLICATION = 'config.wsgi.application'
 
 # ─── Database ────────────────────────────────────────────────────────────────
 # SQLite is used ONLY for Django internals (auth, sessions, admin).
@@ -152,7 +152,7 @@ LOGGING = {
         'level': 'INFO',
     },
     'loggers': {
-        'api': {
+        'documents': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,

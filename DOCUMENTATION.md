@@ -1,6 +1,6 @@
 # NeuroLex: Term Sheet Analyzer — Technical Documentation
 
-> **Version:** 2.2 · **Last Updated:** June 20, 2026
+> **Version:** 2.3 · **Last Updated:** June 20, 2026
 > A comprehensive "Zero-to-Hero" guide for new developers joining the project.
 
 ---
@@ -107,8 +107,8 @@ NeuroLex follows a **Layered Client-Server Architecture** with clear separation 
 - **Dual Text Extraction**: Text can be extracted client-side (browser) OR server-side. The frontend preferentially extracts text in the browser and sends the raw text to the backend, offloading heavy computation from the server.
 - **Stateful Processing Pipeline**: Each document moves through states: `extracted` → `processed` → `validated` (with `error` on failure).
 - **FAISS-backed RAG**: A vector store built from CSV reference data enables semantic search to find similar term sheets for validation comparison.
-- **MongoDB-first persistence**: Documents, structured data, and validation results are stored as MongoDB documents in the `documents` collection of the `NeuroLex` database. A pymongo service module (`api/mongodb.py`) is the single source of truth for all data access.
-- **Provider-agnostic LLM access**: All AI calls flow through a single `api/llm_client.py` module that talks to OpenRouter's chat completions endpoint. Swapping models or providers requires changing only this module and the environment config.
+- **MongoDB-first persistence**: Documents, structured data, and validation results are stored as MongoDB documents in the `documents` collection of the `NeuroLex` database. A pymongo data-access module (`documents/repository.py`) is the single source of truth for all data access.
+- **Provider-agnostic LLM access**: All AI calls flow through a single `documents/llm_client.py` module that talks to OpenRouter's chat completions endpoint. Swapping models or providers requires changing only this module and the environment config.
 - **Single, unified API**: A focused set of `Document` endpoints (the legacy term-sheet/extracted-data/validation ViewSets have been removed).
 
 ---
@@ -117,17 +117,19 @@ NeuroLex follows a **Layered Client-Server Architecture** with clear separation 
 
 ### 3.1 Backend (`backend/`)
 
-#### 3.1.1 `termsheet_processor/` — Django Project Configuration
+#### 3.1.1 `config/` — Django Project Configuration
 
 | File | Responsibility |
 |------|---------------|
 | `settings.py` | Django settings: loads `.env` via `python-dotenv`, SQLite for internals, MongoDB Atlas URI, CORS (allow all origins), DRF config, OpenRouter API config, logging, media paths |
 | `urls.py` | Root URL configuration: mounts `api/` routes and Django admin at `admin/` |
-| `wsgi.py` / `asgi.py` | WSGI/ASGI entry points for deployment |
+| `wsgi.py` / `asgi.py` | WSGI/ASGI entry points for deployment (`config.wsgi:application`) |
 
-#### 3.1.2 `api/` — Core Application Module
+#### 3.1.2 `documents/` — Core Application (Django App)
 
-##### `mongodb.py` — Data Access Layer (MongoDB Atlas)
+The `documents` app contains all document processing logic. It has **no Django ORM models** — application data lives in MongoDB Atlas, accessed through `repository.py`.
+
+##### `repository.py` — Data Access Layer (MongoDB Atlas)
 
 The single gateway to all application data. Uses a lazy singleton `MongoClient`.
 
@@ -144,7 +146,7 @@ The single gateway to all application data. Uses a lazy singleton `MongoClient`.
 | `_serialize(doc)` | Converts `ObjectId` → string and `datetime` → ISO string recursively |
 | `normalise_doc(doc)` | Maps `_id` → `id` and ensures all expected fields are present for the frontend |
 
-> **Design Note:** There is no Django ORM model for application data anymore. The previous `Document`, `TermSheetDocument`, `ExtractedTermSheet`, and `ValidationResult` ORM models are not used for storage — MongoDB documents in the `documents` collection hold everything (text, structured data, validation results) in a single record.
+> **Design Note:** There is no Django ORM model for application data. MongoDB documents in the `documents` collection hold everything (text, structured data, validation results) in a single record. The app's `migrations/` package is intentionally empty — Django's SQLite DB only stores framework internals (auth, sessions, admin).
 
 ##### `llm_client.py` — LLM Provider Layer (OpenRouter)
 
@@ -235,7 +237,6 @@ Contains CSV files used by the RAG service for term sheet validation:
 | `ValidationResults` | `ValidationResults.tsx` | Renders validation results: status badge, explanation, issues table (sorted by severity), RAG metadata with field-by-field comparison, recommendations |
 | `ValidationReport` | `ValidationReport.tsx` | Generates professional PDF validation reports using jsPDF with auto-tables |
 | `TermSheetAnalyzer` | `TermSheetAnalyzer.tsx` | Self-contained analyzer: uploads, extracts text client-side, processes, and validates a term sheet |
-| `Header` | `Header.tsx` | Application header with branding |
 
 ##### Layout & UI Components
 
@@ -570,7 +571,7 @@ graph TB
         TES["Text Extraction Service<br/>(PyMuPDF, PDFPlumber,<br/>python-docx, Pytesseract)"]
         PES["Processing Service<br/>(process_extracted_text)"]
         VES["Validation Service<br/>(validate_term_sheet)"]
-        MONGO["mongodb.py<br/>(pymongo data layer)"]
+        MONGO["repository.py<br/>(pymongo data layer)"]
         LLM["llm_client.py<br/>(OpenRouter REST)"]
     end
 
@@ -625,7 +626,7 @@ sequenceDiagram
     participant Extract as Text Extraction<br/>(Browser)
     participant API as API Service<br/>(Axios)
     participant Views as Django Views<br/>(APIView)
-    participant Mongo as mongodb.py<br/>(pymongo)
+    participant Mongo as repository.py<br/>(pymongo)
     participant Svc as Services<br/>(services.py)
     participant LLM as llm_client<br/>(OpenRouter)
     participant RAG as RAG Service<br/>(rag_service.py)
@@ -894,7 +895,7 @@ docker compose up --build
 | File | Role |
 |------|------|
 | `backend/Dockerfile` | Python 3.10 image; installs system deps (tesseract-ocr, poppler-utils, libmagic1, libgomp1); pre-downloads the `all-MiniLM-L6-v2` model; normalizes `entrypoint.sh` (strips CRLF, `chmod +x`); runs as non-root `app` user |
-| `backend/entrypoint.sh` | Runs `migrate` → `collectstatic` → **Gunicorn** (`termsheet_processor.wsgi`, 3 workers) |
+| `backend/entrypoint.sh` | Runs `migrate` → `collectstatic` → **Gunicorn** (`config.wsgi`, 3 workers) |
 | `frontend/Dockerfile` | 3-stage build (deps → build → runtime) producing a Next.js **standalone** server, runs as non-root `nextjs` user |
 | `docker-compose.yml` | Orchestrates `backend` (8000) + `frontend` (3000); persistent named volumes `backend_db` (SQLite internals) and `backend_media` (uploads); injects `backend/.env` |
 | `.gitattributes` | Forces **LF** line endings for `*.sh`, `Dockerfile`, and YAML so Windows clones don't corrupt the container scripts |
@@ -935,7 +936,7 @@ docker compose up --build
 |----------|-----------|
 | **MongoDB Atlas for app data** | Flexible schema for evolving document/validation shapes; cloud-hosted, no local DB ops; a single self-contained record per document simplifies reads |
 | **SQLite kept for Django internals** | Django's auth/sessions/admin still need a relational store; `djongo` is incompatible with Django 4.2+, so MongoDB is accessed directly via pymongo instead |
-| **Dedicated `mongodb.py` data layer** | One place for all data access; isolates pymongo specifics (ObjectId/datetime serialization) from views |
+| **Dedicated `repository.py` data layer** | One place for all data access; isolates pymongo specifics (ObjectId/datetime serialization) from views |
 | **OpenRouter via a single `llm_client`** | Provider-agnostic LLM access; switching models/providers touches one module and the env config |
 | **Client-side text extraction** | Offloads CPU-intensive work (PDF parsing, OCR) from the server; reduces bandwidth by sending text instead of files |
 | **FAISS over managed vector DB** | Lightweight, in-process, no external dependency; ideal for small reference datasets |

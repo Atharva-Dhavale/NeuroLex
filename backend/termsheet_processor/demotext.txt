@@ -1,8 +1,0 @@
-Trade executed on April 1, 2025, with Trade ID: T002.
-The reference spot price was 1.3493, and the strike price is 1.4124.
-The notional amount involved in this trade is 471,988 USD.
-The trade is a Put option, and we are selling it.
-The expiry date is April 28, 2025, and the delivery date is April 30, 2025.
-The premium rate for this trade is 0.0362.
-The trade involves USD as the transaction currency, EUR as the counter currency, and GBP as the underlying currency.
-The trade follows the New York Business Calendar.

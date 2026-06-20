@@ -1,8 +1,9 @@
 """
-MongoDB Atlas service layer for NeuroLex.
+Document repository — MongoDB Atlas data-access layer for NeuroLex.
 
-All application data (documents, validation results) is stored here.
-Django's SQLite DB is kept only for auth/sessions/admin internals.
+This module is the single gateway to all application data (documents,
+structured data, validation results). Django's SQLite DB is kept only for
+auth/sessions/admin internals.
 """
 
 import logging

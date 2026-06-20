@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from api.rag_service import debug_rag_service
+from documents.rag_service import debug_rag_service
 
 class Command(BaseCommand):
     help = 'Test the RAG service functionality'

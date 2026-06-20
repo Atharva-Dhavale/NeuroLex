@@ -1,17 +1,17 @@
 from django.apps import AppConfig
 
 
-class ApiConfig(AppConfig):
+class DocumentsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'api'
-    
+    name = 'documents'
+
     def ready(self):
         """Initialize the RAG vector store when Django starts"""
         # Only run in main process, not in management commands or other subprocesses
         import os
         if os.environ.get('RUN_MAIN', None) != 'true':
             return
-            
+
         # Import and initialize vector store
         from .rag_service import initialize_vector_store
         try:

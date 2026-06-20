@@ -11,7 +11,7 @@ python manage.py collectstatic --noinput || true
 
 # Start the application server
 echo "Starting Gunicorn on 0.0.0.0:8000..."
-exec gunicorn termsheet_processor.wsgi:application \
+exec gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS:-3}" \
     --timeout "${GUNICORN_TIMEOUT:-180}"
