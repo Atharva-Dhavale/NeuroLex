@@ -34,6 +34,12 @@ RUN pip install --upgrade pip \
 # ─── Application code ─────────────────────────────────────────────────────────
 COPY . .
 
+# Normalize the entrypoint for cross-platform safety:
+# - strip any CRLF line endings (Windows clones) so the Linux shebang works
+# - guarantee the executable bit (Windows git drops it)
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh
+
 # Pre-download the SentenceTransformer model so the first request is fast.
 # Also create the volume mount dirs owned by `app` so named volumes inherit
 # the correct (non-root) ownership on first creation.
@@ -45,5 +51,5 @@ USER app
 
 EXPOSE 8000
 
-COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Invoke through `sh` so it runs even if the exec bit is somehow lost
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]

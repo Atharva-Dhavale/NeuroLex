@@ -162,6 +162,15 @@ To point the frontend at a non-local backend, set the build arg:
 NEXT_PUBLIC_API_URL=https://api.example.com/api docker compose up --build
 ```
 
+### Cross-platform notes (macOS & Windows)
+
+The Docker setup is **host-agnostic** — the containers run their own Linux Python and Node, so it does not matter whether your host uses `python3` (macOS/Linux) or `python` (Windows). The same commands work everywhere:
+
+- **macOS (Apple Silicon / Intel):** Docker automatically builds native `arm64`/`amd64` images. No changes needed.
+- **Windows:** Install **Docker Desktop with the WSL 2 backend**, then run `docker compose up --build` from PowerShell or WSL. Line endings and the entrypoint executable bit are normalized automatically (via `.gitattributes` and the Dockerfile), so the build is not affected by Windows' CRLF defaults.
+
+> Because the app is fully containerized, Docker is the recommended way to run NeuroLex on any OS without installing Python, Node, or system libraries (tesseract, poppler) locally.
+
 ---
 
 ## 🔌 API Reference

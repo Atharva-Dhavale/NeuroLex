@@ -1,0 +1,30 @@
+# Normalize line endings across macOS, Linux, and Windows.
+# Default: let Git handle text normalization automatically.
+* text=auto
+
+# Files that MUST keep LF endings (run inside Linux containers / shells).
+# Without this, Windows checkouts would use CRLF and break the Docker build.
+*.sh            text eol=lf
+entrypoint.sh   text eol=lf
+Dockerfile      text eol=lf
+*.dockerfile    text eol=lf
+docker-compose.yml text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+
+# Windows batch/PowerShell scripts keep CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Treat these as binary (never normalize / diff).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.node binary
