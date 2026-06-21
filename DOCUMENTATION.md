@@ -1,6 +1,6 @@
 # NeuroLex: Term Sheet Analyzer — Technical Documentation
 
-> **Version:** 2.4 · **Last Updated:** June 20, 2026
+> **Version:** 2.5 · **Last Updated:** June 21, 2026
 > A comprehensive "Zero-to-Hero" guide for new developers joining the project.
 
 ---
@@ -32,7 +32,7 @@
 |---|---|
 | **Multi-format Ingestion** | Upload term sheets as PDF, DOCX, images (OCR), or plain text |
 | **AI-Powered Extraction** | An OpenRouter-hosted LLM converts unstructured text → structured JSON with 14 trading fields |
-| **RAG Validation** | FAISS vector store + SentenceTransformers find similar reference sheets; the LLM validates against them |
+| **RAG Validation** | FAISS vector store + spaCy word vectors find similar reference sheets; the LLM validates against them |
 | **Client-Side Extraction** | PDF.js, Mammoth, Tesseract.js extract text in the browser for performance |
 | **MongoDB Atlas Storage** | All document and validation data persists in a cloud MongoDB Atlas cluster |
 | **PDF Reporting** | Generate downloadable validation reports as professional PDFs |
@@ -55,7 +55,7 @@
 | **Backend Framework** | Django + DRF | 4.2.20 / 3.15.2 |
 | **AI Provider** | OpenRouter (`openai/gpt-oss-120b:free`) | via REST (`requests`) |
 | **Vector Search** | FAISS (CPU) | 1.10.0 |
-| **Embeddings** | SentenceTransformers (`all-MiniLM-L6-v2`) | 3.4.1 |
+| **Embeddings** | spaCy (`en_core_web_md`, 300-dim GloVe vectors) | 3.7.4 |
 | **PDF Extraction (Server)** | PyMuPDF + PDFPlumber + Pytesseract | Various |
 | **DOCX Extraction (Server)** | python-docx | 1.1.2 |
 | **Application Database** | MongoDB Atlas (via pymongo) | pymongo 3.12.3 |
@@ -130,7 +130,7 @@ backend/
 │   ├── repository.py       # MongoDB Atlas data-access layer (pymongo)
 │   ├── services.py         # text extraction + LLM structuring/validation orchestration
 │   ├── llm_client.py       # OpenRouter chat-completions client
-│   ├── rag_service.py      # FAISS + SentenceTransformers RAG validation
+│   ├── rag_service.py      # FAISS + spaCy word-vector RAG validation
 │   ├── apps.py             # AppConfig (initializes the RAG vector store on startup)
 │   ├── migrations/         # intentionally empty (no ORM models — data is in MongoDB)
 │   └── management/commands/# prepare_reference_data, test_rag (dev utilities)
@@ -214,7 +214,9 @@ Helper: `make_json_safe(obj)` recursively sanitises NaN/Infinity and non-seriali
 
 | Function | Responsibility |
 |----------|---------------|
-| `initialize_vector_store()` | Loads `Validated_Term_Sheet_Data.csv`, creates embeddings with `all-MiniLM-L6-v2`, builds FAISS L2 index. Runs on module import. |
+| `initialize_vector_store()` | Loads `Validated_Term_Sheet_Data.csv`, encodes rows using spaCy's `en_core_web_md` averaged word vectors (300-dim), builds FAISS L2 index. Runs on module import. |
+| `_encode_texts(texts)` | Encodes a list of strings into a 2-D float32 numpy array using `nlp(text).vector` |
+| `_encode_single(text)` | Encodes a single string to a 1×300 float32 array for FAISS query |
 | `search_similar_term_sheets(structured_data, top_k)` | Encodes query as vector, searches FAISS index, returns top-k matches with similarity scores |
 | `validate_term_sheet_with_rag(structured_data)` | **Core validation**: finds best match → does field-by-field smart comparison (14 fields, numeric tolerance, semantic similarity, date normalization) → sends comparison to the LLM (via `llm_client.generate_content()`) for final judgment |
 | `normalize_value(value)` | Handles date formats, option type synonyms (Call/Put), position types (Buy/Sell), currency formatting |
@@ -298,6 +300,8 @@ CSV datasets for the RAG service. Only **`Validated_Term_Sheet_Data.csv`** is lo
 | `ValidationIssue` | `field`, `severity` (high/medium/low), `description` |
 | `RagMetadata` | `reference_sheet_id`, `similarity_score`, `comparison_summary[]` |
 | `ApiResponse<T>` | `data?: T`, `error?: string`, `warning?: string` |
+
+> **Note:** `src/types/react-icons.d.ts` — manual type declaration file for `react-icons/fi` (the package ships JS-only submodule exports with no `.d.ts`). Required for the TypeScript build to succeed.
 
 #### 3.2.5 `src/utils/` — Utility Functions
 
@@ -423,7 +427,7 @@ validate_term_sheet(structured_data) → validate_term_sheet_with_rag(structured
     │
     ▼
 Step 1: Vector Search
-    → Encode structured_data with SentenceTransformer ('all-MiniLM-L6-v2')
+    → Encode structured_data with spaCy en_core_web_md (300-dim averaged word vectors)
     → Search FAISS index → top-1 result
     │
     ▼
@@ -613,7 +617,7 @@ graph TB
 
     subgraph "AI & RAG Layer"
         OR["OpenRouter<br/>(openai/gpt-oss-120b:free)<br/>Extraction + Validation"]
-        EMBED["SentenceTransformers<br/>(all-MiniLM-L6-v2)"]
+        EMBED["spaCy<br/>(en_core_web_md, 300-dim)"]
         FAISS["FAISS Vector Index<br/>(L2 Distance Search)"]
     end
 
@@ -725,19 +729,19 @@ sequenceDiagram
 sequenceDiagram
     participant Svc as services.py
     participant RAG as rag_service.py
-    participant ST as SentenceTransformer
+    participant NLP as spaCy<br/>(en_core_web_md)
     participant FI as FAISS Index
     participant CSV as Reference CSV
     participant LLM as llm_client (OpenRouter)
 
     Note over RAG,CSV: Initialization (on module import)
     RAG->>CSV: Load Validated_Term_Sheet_Data.csv
-    RAG->>ST: Encode all rows → embeddings
-    RAG->>FI: Build IndexFlatL2(384 dims) + add embeddings
+    RAG->>NLP: Encode all rows → 300-dim word vectors
+    RAG->>FI: Build IndexFlatL2(300 dims) + add embeddings
 
     Note over Svc,LLM: Validation Request
     Svc->>RAG: validate_term_sheet_with_rag(data)
-    RAG->>ST: Encode query data
+    RAG->>NLP: Encode query data (nlp(text).vector)
     RAG->>FI: Search(query_embedding, k=1)
     FI-->>RAG: Best match (index, distance)
 
@@ -812,24 +816,27 @@ DEBUG=True
 ```bash
 cd backend
 
-# 1. Install Python dependencies (first run also downloads the
-#    sentence-transformers model 'all-MiniLM-L6-v2' on first import — ~90MB)
+# 1. Install Python dependencies
 /opt/homebrew/bin/python3.10 -m pip install -r requirements.txt
 
-# 2. Apply migrations (SQLite internals only: auth, sessions, admin)
+# 2. Download the spaCy language model (one-time; ~43 MB)
+/opt/homebrew/bin/python3.10 -m spacy download en_core_web_md
+
+# 3. Apply migrations (SQLite internals only: auth, sessions, admin)
 /opt/homebrew/bin/python3.10 manage.py migrate
 
-# 3. Run the dev server
+# 4. Run the dev server
 /opt/homebrew/bin/python3.10 manage.py runserver 8000
 ```
 
 The backend starts on **http://localhost:8000**.
 
 On startup you should see (in order):
-1. `Vector store initialized with N reference documents` — FAISS/RAG ready.
-2. On the first API request: `Connected to MongoDB Atlas — database: NeuroLex`.
+1. `spaCy model 'en_core_web_md' loaded successfully` — embeddings ready.
+2. `Vector store initialized with N reference documents` — FAISS/RAG ready.
+3. On the first API request: `Connected to MongoDB Atlas — database: NeuroLex`.
 
-> The FAISS vector store and the SentenceTransformer model load **at import time** of `rag_service.py`. The very first run downloads the embedding model, so the first `migrate`/`runserver` can take longer than subsequent runs.
+> The FAISS vector store loads **at import time** of `rag_service.py` using spaCy's pre-installed `en_core_web_md` model. Startup is fast because the model is already on disk (no network download at runtime).
 
 ### 8.5 Frontend — Install, Build, Run
 
@@ -905,7 +912,7 @@ Relevant `settings.py` keys derived from the env: `OPENROUTER_API_KEY`, `OPENROU
 | `Could not find a version that satisfies the requirement django==4.2.x` | Plain `python3`/`pip3` resolves to system Python 3.9 | Use `/opt/homebrew/bin/python3.10 -m pip ...` |
 | `command not found: npm` | Node.js not installed | `brew install node` |
 | `429 RESOURCE_EXHAUSTED` / rate-limit error in process/validate response | OpenRouter free-tier rate limit on `:free` model | Wait and retry, or switch `OPENROUTER_MODEL` to a paid model |
-| First `runserver` is slow / downloads a model | `sentence-transformers` downloads `all-MiniLM-L6-v2` on first import | Normal; cached for subsequent runs |
+| `OSError: [E050] Can't find model 'en_core_web_md'` | spaCy model not installed | Run `python3.10 -m spacy download en_core_web_md` once |
 | MongoDB connection timeout | Atlas IP allowlist or bad `MONGO_URI` | Allow your IP in Atlas Network Access; verify the SRV URI |
 | VS Code shows `bad object` / `frontend/.git` warnings | Stale git-extension cache after unifying the frontend repo | Reload the editor window |
 | Docker frontend build: `Module parse failed: Unexpected character` on `canvas.node` | webpack tried to bundle pdfjs's native canvas binary | Already fixed via `resolve.alias.canvas = false` in `next.config.js` |
@@ -930,7 +937,7 @@ docker compose up --build
 
 | File | Role |
 |------|------|
-| `backend/Dockerfile` | Python 3.10 image; installs system deps (tesseract-ocr, poppler-utils, libmagic1, libgomp1); pre-downloads the `all-MiniLM-L6-v2` model; normalizes `entrypoint.sh` (strips CRLF, `chmod +x`); runs as non-root `app` user |
+| `backend/Dockerfile` | Python 3.10 image; installs system deps (tesseract-ocr, poppler-utils, libmagic1, build-essential); downloads `en_core_web_md` spaCy model at build time via `python -m spacy download en_core_web_md`; normalizes `entrypoint.sh` (strips CRLF, `chmod +x`); runs as non-root `app` user |
 | `backend/entrypoint.sh` | Runs `migrate` → `collectstatic` → **Gunicorn** (`config.wsgi`, 3 workers) |
 | `frontend/Dockerfile` | 3-stage build (deps → build → runtime) producing a Next.js **standalone** server, runs as non-root `nextjs` user |
 | `docker-compose.yml` | Orchestrates `backend` (8000) + `frontend` (3000); persistent named volumes `backend_db` (SQLite internals) and `backend_media` (uploads); injects `backend/.env` |
@@ -976,7 +983,7 @@ docker compose up --build
 | **OpenRouter via a single `llm_client`** | Provider-agnostic LLM access; switching models/providers touches one module and the env config |
 | **Client-side text extraction** | Offloads CPU-intensive work (PDF parsing, OCR) from the server; reduces bandwidth by sending text instead of files |
 | **FAISS over managed vector DB** | Lightweight, in-process, no external dependency; ideal for small reference datasets |
-| **SentenceTransformers `all-MiniLM-L6-v2`** | Good semantic similarity at only 384 dimensions — fast to encode and search |
+| **spaCy `en_core_web_md` over SentenceTransformers** | Eliminates PyTorch (~700 MB) from the dependency tree; spaCy's 300-dim averaged GloVe word vectors are sufficient for JSON-structured trading data similarity; Docker image reduced ~78% (~1.2 GB → ~250 MB); no HuggingFace cache needed |
 | **5-strategy JSON parsing** | LLM output varies (markdown blocks, Python-style booleans, etc.); multiple strategies ensure robust parsing |
 | **Same LLM for extraction AND validation** | Single provider simplifies infra; extraction uses structured prompts, validation uses comparison-based prompts |
 | **Single unified Documents API** | The legacy term-sheet/extracted-data/validation ViewSets were removed to reduce maintenance surface |

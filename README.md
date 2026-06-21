@@ -33,7 +33,7 @@ The system replaces a slow, error-prone manual review process with a fast, consi
 - 📄 **Multi-Format Ingestion** — PDF, DOCX, images (OCR), Excel, and plain text.
 - ⚡ **Client-Side Text Extraction** — PDF.js, Mammoth, and Tesseract.js extract text in the browser, offloading heavy work from the server.
 - 🤖 **AI-Powered Extraction** — An OpenRouter-hosted LLM converts unstructured text into structured JSON with a 5-strategy parsing fallback for robustness.
-- 🔍 **RAG-Based Validation** — FAISS vector search + SentenceTransformers find the most similar reference term sheet; a smart comparator checks each field; the LLM delivers the final judgment.
+- 🔍 **RAG-Based Validation** — FAISS vector search + spaCy word vectors find the most similar reference term sheet; a smart comparator checks each field; the LLM delivers the final judgment.
 - 🎯 **Domain-Aware Matching** — Numeric tolerance (±1%), date normalization, and trading synonyms (Call/C, Buy/Long, NYSE/"New York Stock Exchange").
 - 📊 **Rich Results UI** — Status badges, severity-sorted issues, field-by-field RAG comparison, and recommendations.
 - 📥 **PDF Reporting** — One-click professional validation reports via jsPDF.
@@ -78,7 +78,7 @@ The system replaces a slow, error-prone manual review process with a fast, consi
 | **Client Extraction** | PDF.js, Mammoth, Tesseract.js, SheetJS, jsPDF |
 | **Backend** | Django 4.2, Django REST Framework, Python 3.10 |
 | **AI / LLM** | OpenRouter (`openai/gpt-oss-120b`) |
-| **RAG** | FAISS (vector search) + SentenceTransformers (`all-MiniLM-L6-v2`) |
+| **RAG** | FAISS (vector search) + spaCy (`en_core_web_md`, 300-dim GloVe vectors) |
 | **Server Extraction** | PyMuPDF, PDFPlumber, python-docx, Pytesseract |
 | **Database** | MongoDB Atlas (pymongo) |
 | **DevOps** | python-dotenv, django-cors-headers |
@@ -112,6 +112,9 @@ cp .env.example .env
 
 # Install dependencies
 python3.10 -m pip install -r requirements.txt
+
+# Download the spaCy language model (required for RAG embeddings)
+python3.10 -m pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.7.1/en_core_web_md-3.7.1-py3-none-any.whl
 
 # Apply Django internal migrations (SQLite: auth/sessions/admin)
 python3.10 manage.py migrate
@@ -154,7 +157,7 @@ docker compose up --build
 - Frontend → **http://localhost:3000**
 - Backend API → **http://localhost:8000/api**
 
-The backend image pre-downloads the embedding model and runs under Gunicorn; the frontend is built as an optimized Next.js standalone server. To run in the background use `docker compose up -d --build`, and stop with `docker compose down`.
+The backend image downloads the spaCy `en_core_web_md` model at build time and runs under Gunicorn; the frontend is built as an optimized Next.js standalone server. To run in the background use `docker compose up -d --build`, and stop with `docker compose down`.
 
 To point the frontend at a non-local backend, set the build arg:
 
@@ -215,7 +218,7 @@ NeuroLex/
 │   │   ├── repository.py       # MongoDB Atlas data-access layer (pymongo)
 │   │   ├── llm_client.py       # OpenRouter LLM client
 │   │   ├── services.py         # Text extraction + structured-data processing
-│   │   ├── rag_service.py      # FAISS + SentenceTransformers RAG validation
+│   │   ├── rag_service.py      # FAISS + spaCy word-vector RAG validation
 │   │   ├── views.py            # REST API (class-based APIViews)
 │   │   └── urls.py             # API routes
 │   ├── config/                 # Django project config (settings, urls, wsgi, asgi)

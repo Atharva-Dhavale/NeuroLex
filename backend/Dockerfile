@@ -4,20 +4,17 @@ FROM python:3.10-slim-bookworm
 # Prevent Python from writing .pyc files & buffering stdout
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/home/app/.cache/huggingface
+    PIP_NO_CACHE_DIR=1
 
 # ─── System dependencies ─────────────────────────────────────────────────────
 # tesseract-ocr  → image OCR (pytesseract)
 # poppler-utils  → PDF → image conversion (pdf2image)
 # libmagic1      → file type detection (python-magic)
-# libgomp1       → OpenMP runtime required by torch / faiss
 # build-essential→ fallback for any package needing compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     poppler-utils \
     libmagic1 \
-    libgomp1 \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,7 +26,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt \
-    && pip install gunicorn==23.0.0
+    && pip install gunicorn==23.0.0 \
+    && pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.7.1/en_core_web_md-3.7.1-py3-none-any.whl
 
 # ─── Application code ─────────────────────────────────────────────────────────
 COPY . .
@@ -40,12 +38,10 @@ COPY . .
 RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && chmod +x /app/entrypoint.sh
 
-# Pre-download the SentenceTransformer model so the first request is fast.
-# Also create the volume mount dirs owned by `app` so named volumes inherit
+# Create volume mount dirs owned by `app` so named volumes inherit
 # the correct (non-root) ownership on first creation.
 RUN mkdir -p /app/db /app/media \
-    && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" \
-    && chown -R app:app /app /home/app/.cache
+    && chown -R app:app /app /home/app
 
 USER app
 
