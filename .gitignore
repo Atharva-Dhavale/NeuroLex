@@ -92,3 +92,5 @@ Thumbs.db
 frontend/.next/cache/webpack/
 frontend/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node
 backend/venv/lib/python3.12/site-packages/torch/lib/libtorch_cpu.dylib
+
+CLAUDE.md
